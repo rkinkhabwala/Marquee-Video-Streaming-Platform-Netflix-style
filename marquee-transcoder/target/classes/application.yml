@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: marquee-transcoder
+  main:
+    banner-mode: "off"
+
+server:
+  port: ${SERVER_PORT:8081}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+
+info:
+  app:
+    name: Marquee Transcoder
+    version: 0.1.0

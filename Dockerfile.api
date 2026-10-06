@@ -1,0 +1,20 @@
+FROM maven:3.9.9-eclipse-temurin-21-alpine AS build
+WORKDIR /workspace
+COPY pom.xml .
+COPY marquee-common/pom.xml marquee-common/pom.xml
+COPY marquee-api/pom.xml marquee-api/pom.xml
+COPY marquee-transcoder/pom.xml marquee-transcoder/pom.xml
+RUN mkdir -p marquee-common/src/main/java marquee-api/src/main/java marquee-transcoder/src/main/java
+RUN mvn -B -ntp -pl marquee-api -am dependency:go-offline
+COPY marquee-common/src marquee-common/src
+COPY marquee-api/src marquee-api/src
+RUN mvn -B -ntp -pl marquee-api -am package -DskipTests
+
+FROM eclipse-temurin:21-jre-alpine
+RUN apk add --no-cache curl
+WORKDIR /app
+COPY --from=build /workspace/marquee-api/target/marquee-api.jar /app/app.jar
+EXPOSE 8080
+HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=5 \
+    CMD curl -fsS http://localhost:8080/actuator/health/readiness || exit 1
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]

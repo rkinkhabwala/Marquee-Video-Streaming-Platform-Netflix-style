@@ -1,0 +1,124 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-marquee}
+      POSTGRES_USER: ${POSTGRES_USER:-marquee}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-marquee_local}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-marquee}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-marquee_local}
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  minio:
+    image: docker.io/pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-marquee}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-marquee_local}
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio-init:
+    image: amazon/aws-cli:2.27.49
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-marquee}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-marquee_local}
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        if aws --endpoint-url http://minio:9000 s3 ls s3://marquee >/dev/null 2>&1; then
+          echo "bucket exists"
+        else
+          aws --endpoint-url http://minio:9000 s3 mb s3://marquee
+        fi
+    restart: "no"
+
+  marquee-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    environment:
+      SERVER_PORT: 8080
+    ports:
+      - "${API_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health/readiness"]
+      interval: 10s
+      timeout: 3s
+      start_period: 30s
+      retries: 5
+
+  marquee-transcoder:
+    build:
+      context: .
+      dockerfile: Dockerfile.transcoder
+    environment:
+      SERVER_PORT: 8081
+    ports:
+      - "${TRANSCODER_PORT:-8081}:8081"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8081/actuator/health/readiness"]
+      interval: 10s
+      timeout: 3s
+      start_period: 30s
+      retries: 5
+
+volumes:
+  postgres-data:
+  minio-data:
