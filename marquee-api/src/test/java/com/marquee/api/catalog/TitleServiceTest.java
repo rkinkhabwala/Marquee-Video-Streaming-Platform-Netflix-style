@@ -31,6 +31,9 @@ class TitleServiceTest {
     @Mock
     private EpisodeRepository episodeRepository;
 
+    @Mock
+    private VideoAssetRepository videoAssetRepository;
+
     @InjectMocks
     private TitleService titleService;
 

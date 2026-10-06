@@ -14,15 +14,18 @@ public class TitleService {
     private final GenreRepository genreRepository;
     private final SeasonRepository seasonRepository;
     private final EpisodeRepository episodeRepository;
+    private final VideoAssetRepository videoAssetRepository;
 
     public TitleService(TitleRepository titleRepository,
                         GenreRepository genreRepository,
                         SeasonRepository seasonRepository,
-                        EpisodeRepository episodeRepository) {
+                        EpisodeRepository episodeRepository,
+                        VideoAssetRepository videoAssetRepository) {
         this.titleRepository = titleRepository;
         this.genreRepository = genreRepository;
         this.seasonRepository = seasonRepository;
         this.episodeRepository = episodeRepository;
+        this.videoAssetRepository = videoAssetRepository;
     }
 
     @Transactional(readOnly = true)
@@ -206,7 +209,8 @@ public class TitleService {
         if (request.name() == null || request.name().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Episode name is required");
         }
-        Episode episode = new Episode(season, request.episodeNumber(), request.name().trim(), request.synopsis(), null);
+        VideoAsset asset = resolveEpisodeAsset(season, request.videoAssetId());
+        Episode episode = new Episode(season, request.episodeNumber(), request.name().trim(), request.synopsis(), asset);
         return EpisodeResponse.from(episodeRepository.save(episode));
     }
 
@@ -223,7 +227,22 @@ public class TitleService {
         if (request.synopsis() != null) {
             episode.setSynopsis(request.synopsis());
         }
+        if (request.videoAssetId() != null) {
+            episode.setVideoAsset(resolveEpisodeAsset(episode.getSeason(), request.videoAssetId()));
+        }
         return EpisodeResponse.from(episodeRepository.save(episode));
+    }
+
+    private VideoAsset resolveEpisodeAsset(Season season, Long videoAssetId) {
+        if (videoAssetId == null) {
+            return null;
+        }
+        VideoAsset asset = videoAssetRepository.findById(videoAssetId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Video asset not found"));
+        if (asset.getTitle() == null || !asset.getTitle().getId().equals(season.getTitle().getId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Video asset belongs to a different title");
+        }
+        return asset;
     }
 
     @Transactional

@@ -3,7 +3,6 @@ package com.marquee.api.progress;
 import com.marquee.api.security.UserPrincipal;
 import jakarta.validation.Valid;
 import java.util.List;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -43,7 +42,7 @@ public class ProgressController {
                                            @RequestHeader("X-Profile-Id") Long profileId,
                                            @PathVariable Long titleId) {
         progressService.addToMyList(principal.getId(), profileId, titleId);
-        return ResponseEntity.status(HttpStatus.CREATED).build();
+        return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/my-list/{titleId}")

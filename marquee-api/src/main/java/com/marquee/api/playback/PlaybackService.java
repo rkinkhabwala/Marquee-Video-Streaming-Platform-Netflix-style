@@ -6,15 +6,12 @@ import com.marquee.api.catalog.VideoAssetStatus;
 import com.marquee.api.catalog.VideoAssetRepository;
 import com.marquee.api.profile.Profile;
 import com.marquee.api.profile.ProfileRepository;
-import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class PlaybackService {
-    private static final Set<String> KIDS_ALLOWED_RATINGS = Set.of("G", "PG", "TV-Y", "TV-Y7", "TV-G", "TV-PG");
-
     private final ProfileRepository profileRepository;
     private final VideoAssetRepository videoAssetRepository;
     private final PlaybackTokenService playbackTokenService;
@@ -66,11 +63,8 @@ public class PlaybackService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Asset is not associated with a title");
         }
 
-        if (profile.isKids() && title.getMaturityRating() != null) {
-            String ratingValue = title.getMaturityRating().dbValue();
-            if (!KIDS_ALLOWED_RATINGS.contains(ratingValue)) {
-                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Kids profile cannot play this title");
-            }
+        if (profile.isKids() && (title.getMaturityRating() == null || !title.getMaturityRating().isKidsSafe())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Kids profile cannot play this title");
         }
     }
 }

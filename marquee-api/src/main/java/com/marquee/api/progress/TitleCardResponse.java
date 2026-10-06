@@ -8,5 +8,6 @@ public record TitleCardResponse(Long id,
                                String posterKey,
                                String backdropKey,
                                Integer resumeAt,
+                               Long resumeAssetId,
                                boolean inMyList) {
 }

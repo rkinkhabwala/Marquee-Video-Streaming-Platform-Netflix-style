@@ -1,6 +1,7 @@
 package com.marquee.api.catalog;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import java.util.Set;
 
 public enum MaturityRating {
     G,
@@ -14,6 +15,12 @@ public enum MaturityRating {
     NC_17,
     TV_14,
     TV_MA;
+
+    public static final Set<MaturityRating> KIDS_SAFE = Set.of(G, PG, TV_Y, TV_Y7, TV_G, TV_PG);
+
+    public boolean isKidsSafe() {
+        return KIDS_SAFE.contains(this);
+    }
 
     @JsonCreator
     public static MaturityRating fromValue(String value) {
