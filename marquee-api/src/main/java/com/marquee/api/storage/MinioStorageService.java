@@ -1,5 +1,6 @@
 package com.marquee.api.storage;
 
+import java.io.IOException;
 import java.net.URI;
 import java.time.Duration;
 import java.util.Locale;
@@ -7,10 +8,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
@@ -96,8 +100,26 @@ public class MinioStorageService implements ObjectStorageService {
         try {
             s3Client.headObject(HeadObjectRequest.builder().bucket(bucketName).key(objectKey).build());
             return true;
-        } catch (S3Exception | SdkException e) {
+        } catch (SdkException e) {
             return false;
+        }
+    }
+
+    @Override
+    public ResponseInputStream<GetObjectResponse> getObject(String objectKey, String rangeHeader) {
+        GetObjectRequest.Builder builder = GetObjectRequest.builder().bucket(bucketName).key(objectKey);
+        if (rangeHeader != null && !rangeHeader.isBlank()) {
+            builder.range(rangeHeader);
+        }
+        return s3Client.getObject(builder.build());
+    }
+
+    @Override
+    public byte[] getObjectBytes(String objectKey, String rangeHeader) {
+        try (ResponseInputStream<GetObjectResponse> stream = getObject(objectKey, rangeHeader)) {
+            return stream.readAllBytes();
+        } catch (IOException e) {
+            throw new IllegalStateException("Unable to read object bytes for " + objectKey, e);
         }
     }
 
