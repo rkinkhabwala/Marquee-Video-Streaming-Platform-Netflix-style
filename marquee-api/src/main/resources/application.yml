@@ -33,6 +33,15 @@ app:
     access-key: ${MINIO_ACCESS_KEY:minioadmin}
     secret-key: ${MINIO_SECRET_KEY:minioadmin}
     region: ${MINIO_REGION:us-east-1}
+  rabbitmq:
+    queue: ${RABBITMQ_TRANSCODE_QUEUE:marquee.transcode}
+
+spring:
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:marquee}
+    password: ${RABBITMQ_PASSWORD:marquee_local}
 
 management:
   endpoints:

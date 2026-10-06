@@ -7,14 +7,19 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 @Service
 public class MinioStorageService implements ObjectStorageService {
     private final S3Presigner presigner;
+    private final S3Client s3Client;
     private final String bucketName;
 
     public MinioStorageService(@Value("${app.storage.endpoint}") String endpoint,
@@ -24,6 +29,12 @@ public class MinioStorageService implements ObjectStorageService {
                               @Value("${app.storage.region}") String region) {
         this.bucketName = bucketName;
         this.presigner = S3Presigner.builder()
+                .endpointOverride(URI.create(endpoint))
+                .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)))
+                .region(Region.of(region))
+                .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
+                .build();
+        this.s3Client = S3Client.builder()
                 .endpointOverride(URI.create(endpoint))
                 .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)))
                 .region(Region.of(region))
@@ -60,6 +71,34 @@ public class MinioStorageService implements ObjectStorageService {
                         .url()
                         .toString(),
                 contentType);
+    }
+
+    @Override
+    public PresignedUploadResponse presignUpload(String objectKey, String contentType) {
+        PutObjectRequest putObjectRequest = PutObjectRequest.builder()
+                .bucket(bucketName)
+                .key(objectKey)
+                .contentType(contentType)
+                .build();
+
+        return new PresignedUploadResponse(
+                objectKey,
+                presigner.presignPutObject(builder -> builder
+                        .signatureDuration(Duration.ofMinutes(15))
+                        .putObjectRequest(putObjectRequest))
+                        .url()
+                        .toString(),
+                contentType);
+    }
+
+    @Override
+    public boolean objectExists(String objectKey) {
+        try {
+            s3Client.headObject(HeadObjectRequest.builder().bucket(bucketName).key(objectKey).build());
+            return true;
+        } catch (S3Exception | SdkException e) {
+            return false;
+        }
     }
 
     private String detectContentType(String fileName) {
