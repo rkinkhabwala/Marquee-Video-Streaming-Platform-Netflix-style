@@ -3,9 +3,26 @@ spring:
     name: marquee-transcoder
   main:
     banner-mode: "off"
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:marquee}
+    password: ${RABBITMQ_PASSWORD:marquee_local}
 
 server:
   port: ${SERVER_PORT:8081}
+
+app:
+  rabbitmq:
+    queue: ${RABBITMQ_TRANSCODE_QUEUE:marquee.transcode}
+    dlq: ${RABBITMQ_TRANSCODE_DLQ:marquee.transcode.dlq}
+    max-attempts: ${TRANSCODE_MAX_ATTEMPTS:3}
+  storage:
+    endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+    bucket: ${MINIO_BUCKET:marquee}
+    access-key: ${MINIO_ACCESS_KEY:minioadmin}
+    secret-key: ${MINIO_SECRET_KEY:minioadmin}
+    region: ${MINIO_REGION:us-east-1}
 
 management:
   endpoints:
