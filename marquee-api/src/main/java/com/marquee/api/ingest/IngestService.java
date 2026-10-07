@@ -12,6 +12,7 @@ import com.marquee.common.jobs.TranscodeJob;
 import com.marquee.common.storage.StorageKeys;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -86,6 +87,14 @@ public class IngestService {
         return toResponse(findAsset(assetId));
     }
 
+    @Transactional(readOnly = true)
+    public List<AssetStatusResponse> listAssetsForTitle(Long titleId) {
+        if (!titleRepository.existsById(titleId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Title not found");
+        }
+        return videoAssetRepository.findByTitle_IdOrderByCreatedAtDesc(titleId).stream().map(this::toResponse).toList();
+    }
+
     @Transactional
     public void applyTranscodeEvent(TranscodeEvent event) {
         VideoAsset asset = videoAssetRepository.findById(event.assetId()).orElse(null);
@@ -148,7 +157,7 @@ public class IngestService {
                 asset.getMasterPlaylistKey(),
                 asset.getDurationSeconds(),
                 asset.getErrorMessage(),
-                asset.getId() == null ? java.util.List.of() : attemptRepository.findByVideoAsset_IdOrderByIdAsc(asset.getId()).stream()
+                asset.getId() == null ? List.of() : attemptRepository.findByVideoAsset_IdOrderByIdAsc(asset.getId()).stream()
                         .map(a -> new AssetStatusResponse.Attempt(a.getAttempt(), a.getStatus().name(), a.getStartedAt(), a.getFinishedAt(), a.getLogTail()))
                         .toList());
     }

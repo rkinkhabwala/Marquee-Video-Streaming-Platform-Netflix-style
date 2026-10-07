@@ -57,6 +57,9 @@ class IngestPipelineIT extends IntegrationTestSupport {
             assertThat(asset.masterPlaylistKey()).isEqualTo("hls/" + assetId + "/master.m3u8");
             assertThat(asset.attempts()).extracting(AssetStatusResponse.Attempt::status).containsExactly("FAILED", "SUCCEEDED");
         });
+        assertThat(ingestService.listAssetsForTitle(title.getId()))
+                .extracting(AssetStatusResponse::assetId, AssetStatusResponse::status)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple(assetId, "READY"));
     }
 
     @Test

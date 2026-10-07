@@ -1,9 +1,10 @@
 # Marquee
 
-Marquee is a local-only video streaming backend. An admin uploads videos; they are transcoded to
-adaptive-bitrate HLS and streamed to viewers with signed URLs. The Phase 1 stack is the Spring Boot
-API and transcoder, PostgreSQL, Redis, RabbitMQ and MinIO. See [spec.md](spec.md) for the full
-design and [docs/phase-1-notes.md](docs/phase-1-notes.md) for the decisions made in Phase 1.
+Marquee is a local-only, Netflix-style video streaming app. An admin uploads videos; they are
+transcoded to adaptive-bitrate HLS and streamed to viewers with signed URLs. The stack is a React web
+client, the Spring Boot API and transcoder, PostgreSQL, Redis, RabbitMQ and MinIO. See
+[spec.md](spec.md) for the full design, and the decision notes for
+[Phase 1](docs/phase-1-notes.md) (backend and pipeline) and [Phase 2](docs/phase-2-notes.md) (web client).
 
 ## Start the local stack
 
@@ -36,6 +37,7 @@ It also creates six genres. Seeding is safe to run on every start.
 
 | Service | URL |
 |---|---|
+| **Web app** | **http://localhost:3000** |
 | API health | http://localhost:8080/actuator/health |
 | API docs (Swagger UI) | http://localhost:8080/swagger-ui.html |
 | Transcoder health | http://localhost:8081/actuator/health |
@@ -67,6 +69,25 @@ It fails unless the master playlist has at least two variants and a stream reque
 is rejected. At the end it prints a manifest URL you can open in VLC (Media > Open Network Stream)
 or Safari.
 
+## Web client
+
+Open http://localhost:3000, sign in as the viewer, pick a profile and watch. Sign in as the admin
+and open **Admin** to create titles, upload artwork and video (straight to MinIO, with a progress
+bar), follow the transcode status, add seasons and episodes, and publish.
+
+Player shortcuts: **Space** play/pause, **←/→** 10 s back/forward, **F** fullscreen. The quality
+menu (bottom right) switches between Auto and a fixed rendition and always shows the quality on
+screen.
+
+To work on the client with hot reload (Node 20+), keep the Compose stack running and start Vite,
+which proxies `/api`, `/stream` and `/media` to the API on :8080:
+
+```sh
+cd web
+npm install
+npm run dev        # http://localhost:5173
+```
+
 ## API overview
 
 All `/api` calls except register, login and refresh need `Authorization: Bearer <accessToken>`.
@@ -87,7 +108,7 @@ The full, browsable reference is in Swagger UI.
 
 ## Build and test
 
-Requires Java 21 and Maven, plus Docker for the integration tests.
+Backend (Java 21, Maven, Docker for the integration tests):
 
 ```sh
 mvn verify
@@ -96,6 +117,19 @@ mvn verify
 This runs unit tests and the Testcontainers integration tests (`*IT`) against Postgres, RabbitMQ
 and MinIO. The transcoder's `TranscodePipelineIT` also needs `ffmpeg` and `ffprobe` on the `PATH`
 (`brew install ffmpeg`); without them it is skipped.
+
+Web client (from `web/`):
+
+```sh
+npm run typecheck
+npm test                                     # unit tests (Vitest)
+npx playwright test                          # end-to-end, against the running Compose stack
+E2E_BASE_URL=http://localhost:3000 npx playwright test   # same, through the web container
+```
+
+The end-to-end tests drive the installed Google Chrome (Playwright's bundled Chromium cannot decode
+H.264). On first run they generate test clips with `ffmpeg` and ingest them through the real
+pipeline as "E2E Adaptive Movie" and "E2E Test Series"; later runs reuse them.
 
 > If the project folder is synced by iCloud Drive (for example on `~/Desktop`), iCloud can create
 > `"* 2.class"` conflict copies in `target/` and break builds. Run `mvn clean verify`, or move the

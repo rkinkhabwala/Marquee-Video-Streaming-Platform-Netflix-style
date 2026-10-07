@@ -144,6 +144,16 @@ services:
       start_period: 30s
       retries: 5
 
+  marquee-web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    ports:
+      - "${WEB_PORT:-3000}:80"
+    depends_on:
+      marquee-api:
+        condition: service_healthy
+
 volumes:
   postgres-data:
   minio-data:
