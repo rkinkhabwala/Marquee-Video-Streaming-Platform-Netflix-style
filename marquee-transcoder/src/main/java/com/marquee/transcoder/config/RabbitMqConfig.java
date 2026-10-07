@@ -1,10 +1,10 @@
 package com.marquee.transcoder.config;
 
-import org.springframework.amqp.core.Binding;
-import org.springframework.amqp.core.BindingBuilder;
+import com.marquee.common.jobs.TranscodeQueues;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.QueueBuilder;
-import org.springframework.amqp.core.TopicExchange;
+import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
+import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -12,28 +12,31 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class RabbitMqConfig {
     @Bean
-    public Queue transcodeQueue(@Value("${app.rabbitmq.queue}") String queueName,
-                                @Value("${app.rabbitmq.dlq}") String dlqName) {
-        return QueueBuilder.durable(queueName)
-                .withArgument("x-dead-letter-exchange", "")
-                .withArgument("x-dead-letter-routing-key", dlqName)
+    public Queue transcodeJobsQueue() {
+        return QueueBuilder.durable(TranscodeQueues.JOBS).build();
+    }
+
+    @Bean
+    public Queue transcodeRetryQueue(@Value("${app.transcode.retry-delay-ms:10000}") int retryDelayMs) {
+        return QueueBuilder.durable(TranscodeQueues.RETRY)
+                .ttl(retryDelayMs)
+                .deadLetterExchange("")
+                .deadLetterRoutingKey(TranscodeQueues.JOBS)
                 .build();
     }
 
     @Bean
-    public Queue transcodeDlq(@Value("${app.rabbitmq.dlq}") String dlqName) {
-        return QueueBuilder.durable(dlqName).build();
+    public Queue transcodeDeadLetterQueue() {
+        return QueueBuilder.durable(TranscodeQueues.DEAD_LETTER).build();
     }
 
     @Bean
-    public TopicExchange transcodeExchange() {
-        return new TopicExchange("marquee.transcode.exchange");
+    public Queue transcodeEventsQueue() {
+        return QueueBuilder.durable(TranscodeQueues.EVENTS).build();
     }
 
     @Bean
-    public Binding transcodeBinding(Queue transcodeQueue, TopicExchange transcodeExchange) {
-        return BindingBuilder.bind(transcodeQueue)
-                .to(transcodeExchange)
-                .with("marquee.transcode");
+    public MessageConverter jsonMessageConverter() {
+        return new Jackson2JsonMessageConverter("com.marquee.common.jobs");
     }
 }

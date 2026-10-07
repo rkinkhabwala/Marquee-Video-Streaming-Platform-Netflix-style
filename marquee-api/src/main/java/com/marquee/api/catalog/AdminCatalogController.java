@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -119,8 +120,13 @@ public class AdminCatalogController {
         return ResponseEntity.noContent().build();
     }
 
-    @PostMapping("/images/presign")
-    public PresignedUploadResponse presignImageUpload(@Valid @RequestBody ImageUploadRequest request) {
-        return objectStorageService.presignImageUpload(request);
+    @PostMapping("/titles/{id}/images")
+    public PresignedUploadResponse presignImageUpload(@PathVariable Long id, @Valid @RequestBody ImageUploadRequest request) {
+        titleService.getTitle(id);
+        try {
+            return objectStorageService.presignImageUpload(new ImageUploadRequest(request.kind(), request.fileName(), id));
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+        }
     }
 }

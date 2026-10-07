@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.marquee.api.IntegrationTestSupport;
 import com.marquee.api.catalog.CreateEpisodeRequest;
 import com.marquee.api.catalog.EpisodeResponse;
 import com.marquee.api.catalog.Genre;
@@ -16,6 +17,7 @@ import com.marquee.api.catalog.Season;
 import com.marquee.api.catalog.SeasonRepository;
 import com.marquee.api.catalog.Title;
 import com.marquee.api.catalog.TitleRepository;
+import com.marquee.api.catalog.TitleCardResponse;
 import com.marquee.api.catalog.TitleService;
 import com.marquee.api.catalog.TitleType;
 import com.marquee.api.catalog.VideoAsset;
@@ -33,37 +35,15 @@ import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
-@SpringBootTest
-@AutoConfigureMockMvc
-@Testcontainers
 @Transactional
-class ProgressServiceIT {
+class ProgressServiceIT extends IntegrationTestSupport {
 
-    @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
-
-    @DynamicPropertySource
-    static void registerDataSourceProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-        registry.add("spring.datasource.username", postgres::getUsername);
-        registry.add("spring.datasource.password", postgres::getPassword);
-        registry.add("spring.flyway.url", postgres::getJdbcUrl);
-        registry.add("spring.flyway.user", postgres::getUsername);
-        registry.add("spring.flyway.password", postgres::getPassword);
-    }
 
     @Autowired private MockMvc mockMvc;
     @Autowired private JwtService jwtService;
@@ -153,7 +133,8 @@ class ProgressServiceIT {
 
         Map<String, List<Long>> kidRows = rowIds(kid);
         assertThat(kidRows.get("Trending")).containsExactly(kidsSafe.getId());
-        assertThat(kidRows.get("New Releases")).containsExactly(kidsSafe.getId());
+        assertThat(kidRows.get("New Releases")).contains(kidsSafe.getId())
+                .doesNotContain(mature.getId(), unrated.getId(), draft.getId());
         assertThat(kidRows.get(genre.getName())).containsExactly(kidsSafe.getId());
 
         Map<String, List<Long>> adultRows = rowIds(adult);

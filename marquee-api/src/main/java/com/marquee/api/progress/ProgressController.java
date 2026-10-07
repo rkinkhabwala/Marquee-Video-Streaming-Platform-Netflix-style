@@ -53,6 +53,15 @@ public class ProgressController {
         return ResponseEntity.noContent().build();
     }
 
+    @PutMapping("/ratings/{titleId}")
+    public ResponseEntity<Void> rate(@AuthenticationPrincipal UserPrincipal principal,
+                                     @RequestHeader("X-Profile-Id") Long profileId,
+                                     @PathVariable Long titleId,
+                                     @Valid @RequestBody RatingRequest request) {
+        progressService.rate(principal.getId(), profileId, titleId, request.value());
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/series/{titleId}/next-episode")
     public NextEpisodeResponse getNextEpisode(@AuthenticationPrincipal UserPrincipal principal,
                                              @RequestHeader("X-Profile-Id") Long profileId,

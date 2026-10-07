@@ -18,6 +18,10 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+  mvc:
+    # RFC 7807 application/problem+json for errors raised by controllers.
+    problemdetails:
+      enabled: true
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}
@@ -39,10 +43,16 @@ app:
     access-key: ${MINIO_ACCESS_KEY:minioadmin}
     secret-key: ${MINIO_SECRET_KEY:minioadmin}
     region: ${MINIO_REGION:us-east-1}
+    # Host used in presigned upload URLs; must be reachable by clients (outside Docker).
+    public-endpoint: ${MINIO_PUBLIC_ENDPOINT:${MINIO_ENDPOINT:http://localhost:9000}}
   stream:
     token-ttl-hours: ${STREAM_TOKEN_TTL_HOURS:2}
-  rabbitmq:
-    queue: ${RABBITMQ_TRANSCODE_QUEUE:marquee.transcode}
+  seed:
+    enabled: ${SEED_ENABLED:false}
+    admin-email: ${SEED_ADMIN_EMAIL:admin@marquee.local}
+    admin-password: ${SEED_ADMIN_PASSWORD:}
+    user-email: ${SEED_USER_EMAIL:viewer@marquee.local}
+    user-password: ${SEED_USER_PASSWORD:}
 
 management:
   endpoints:

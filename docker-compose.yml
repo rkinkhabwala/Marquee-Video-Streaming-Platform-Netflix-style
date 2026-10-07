@@ -81,6 +81,24 @@ services:
       dockerfile: Dockerfile.api
     environment:
       SERVER_PORT: 8080
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-marquee}
+      POSTGRES_USER: ${POSTGRES_USER:-marquee}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-marquee_local}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-marquee}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-marquee_local}
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_PUBLIC_ENDPOINT: http://localhost:${MINIO_PORT:-9000}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-marquee}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-marquee_local}
+      JWT_SECRET: ${JWT_SECRET:-marquee-local-dev-secret-change-me-32bytes}
+      STREAM_TOKEN_SECRET: ${STREAM_TOKEN_SECRET:-marquee-local-stream-secret-change-me}
+      SEED_ENABLED: ${SEED_ENABLED:-true}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@marquee.local}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-admin_local_pass}
+      SEED_USER_EMAIL: ${SEED_USER_EMAIL:-viewer@marquee.local}
+      SEED_USER_PASSWORD: ${SEED_USER_PASSWORD:-viewer_local_pass}
     ports:
       - "${API_PORT:-8080}:8080"
     depends_on:
@@ -105,6 +123,13 @@ services:
       dockerfile: Dockerfile.transcoder
     environment:
       SERVER_PORT: 8081
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-marquee}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-marquee_local}
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-marquee}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-marquee_local}
     ports:
       - "${TRANSCODER_PORT:-8081}:8081"
     depends_on:

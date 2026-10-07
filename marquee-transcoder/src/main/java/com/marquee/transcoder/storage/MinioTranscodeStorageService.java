@@ -16,6 +16,8 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 @Service
@@ -40,6 +42,19 @@ public class MinioTranscodeStorageService implements TranscodeStorageService {
     @Override
     public InputStream download(String objectKey) throws IOException {
         return s3Client.getObject(GetObjectRequest.builder().bucket(bucketName).key(objectKey).build());
+    }
+
+    @Override
+    public boolean exists(String objectKey) {
+        try {
+            s3Client.headObject(HeadObjectRequest.builder().bucket(bucketName).key(objectKey).build());
+            return true;
+        } catch (S3Exception e) {
+            if (e.statusCode() == 404) {
+                return false;
+            }
+            throw e;
+        }
     }
 
     @Override
@@ -74,6 +89,9 @@ public class MinioTranscodeStorageService implements TranscodeStorageService {
         }
         if (destinationKey.endsWith(".ts")) {
             return "video/mp2t";
+        }
+        if (destinationKey.endsWith(".jpg")) {
+            return "image/jpeg";
         }
         return "application/octet-stream";
     }

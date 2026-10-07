@@ -7,12 +7,13 @@ import com.marquee.api.catalog.EpisodeRepository;
 import com.marquee.api.catalog.Genre;
 import com.marquee.api.catalog.Season;
 import com.marquee.api.catalog.Title;
+import com.marquee.api.catalog.TitleAccess;
+import com.marquee.api.catalog.TitleCardResponse;
 import com.marquee.api.catalog.TitleRepository;
 import com.marquee.api.catalog.TitleType;
 import com.marquee.api.catalog.VideoAsset;
 import com.marquee.api.catalog.VideoAssetRepository;
 import com.marquee.api.profile.Profile;
-import com.marquee.api.profile.ProfileRepository;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -37,25 +38,28 @@ public class ProgressService {
     // Progress is stored per asset, so a series contributes one row per episode watched.
     private static final int CONTINUE_WATCHING_SCAN = 100;
 
-    private final ProfileRepository profileRepository;
+    private final TitleAccess titleAccess;
     private final VideoAssetRepository videoAssetRepository;
     private final WatchProgressRepository watchProgressRepository;
     private final MyListRepository myListRepository;
     private final TitleRepository titleRepository;
     private final EpisodeRepository episodeRepository;
+    private final RatingRepository ratingRepository;
 
-    public ProgressService(ProfileRepository profileRepository,
+    public ProgressService(TitleAccess titleAccess,
                            VideoAssetRepository videoAssetRepository,
                            WatchProgressRepository watchProgressRepository,
                            MyListRepository myListRepository,
                            TitleRepository titleRepository,
-                           EpisodeRepository episodeRepository) {
-        this.profileRepository = profileRepository;
+                           EpisodeRepository episodeRepository,
+                           RatingRepository ratingRepository) {
+        this.titleAccess = titleAccess;
         this.videoAssetRepository = videoAssetRepository;
         this.watchProgressRepository = watchProgressRepository;
         this.myListRepository = myListRepository;
         this.titleRepository = titleRepository;
         this.episodeRepository = episodeRepository;
+        this.ratingRepository = ratingRepository;
     }
 
     @Transactional
@@ -96,6 +100,18 @@ public class ProgressService {
     public void removeFromMyList(Long userId, Long profileId, Long titleId) {
         requireProfile(userId, profileId);
         myListRepository.deleteByProfile_IdAndTitle_Id(profileId, titleId);
+    }
+
+    @Transactional
+    public void rate(Long userId, Long profileId, Long titleId, Integer value) {
+        if (value == null || (value != 1 && value != -1)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "value must be 1 or -1");
+        }
+        Profile profile = requireProfile(userId, profileId);
+        requireVisibleTitle(profile, titleId);
+        ratingRepository.findById(new RatingId(profileId, titleId))
+                .ifPresentOrElse(rating -> rating.setThumbs(value),
+                        () -> ratingRepository.save(new Rating(profileId, titleId, value)));
     }
 
     @Transactional(readOnly = true)
@@ -173,18 +189,11 @@ public class ProgressService {
     }
 
     private Profile requireProfile(Long userId, Long profileId) {
-        return profileRepository.findByIdAndUserId(profileId, userId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Profile not found"));
+        return titleAccess.requireProfile(userId, profileId);
     }
 
     private Title requireVisibleTitle(Profile profile, Long titleId) {
-        Title title = titleRepository.findById(titleId)
-                .filter(Title::isPublished)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Title not found"));
-        if (profile.isKids() && (title.getMaturityRating() == null || !title.getMaturityRating().isKidsSafe())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Title is not available for kids profiles");
-        }
-        return title;
+        return titleAccess.requireVisibleTitle(profile, titleId);
     }
 
     private List<TitleCardResponse> toTitleCards(List<Title> titles, Set<Long> myListIds) {
@@ -194,17 +203,10 @@ public class ProgressService {
     }
 
     private TitleCardResponse toTitleCard(Title title, Set<Long> myListIds, WatchProgress progress) {
-        return new TitleCardResponse(
-                title.getId(),
-                title.getName(),
-                title.getSynopsis(),
-                title.getType() == null ? null : title.getType().name(),
-                title.getMaturityRating() == null ? null : title.getMaturityRating().dbValue(),
-                title.getPosterKey(),
-                title.getBackdropKey(),
-                progress == null ? null : progress.getPositionSeconds(),
-                progress == null ? null : progress.getVideoAsset().getId(),
-                myListIds.contains(title.getId()));
+        return progress == null
+                ? TitleCardResponse.of(title, myListIds.contains(title.getId()))
+                : TitleCardResponse.of(title, myListIds.contains(title.getId()),
+                        progress.getPositionSeconds(), progress.getVideoAsset().getId());
     }
 
     private NextEpisodeResponse toNextEpisodeResponse(Episode episode, Long titleId) {

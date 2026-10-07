@@ -1,5 +1,6 @@
 package com.marquee.api.playback;
 
+import com.marquee.api.progress.WatchProgressRepository;
 import com.marquee.api.catalog.MaturityRating;
 import com.marquee.api.catalog.Title;
 import com.marquee.api.catalog.TitleType;
@@ -34,6 +35,9 @@ class PlaybackServiceTest {
     @Mock
     private PlaybackTokenService playbackTokenService;
 
+    @Mock
+    private WatchProgressRepository watchProgressRepository;
+
     @InjectMocks
     private PlaybackService playbackService;
 
@@ -45,6 +49,7 @@ class PlaybackServiceTest {
         setId(profile, 5L);
 
         Title title = new Title(TitleType.MOVIE, "Toy Story", "adventure", 1995, MaturityRating.G);
+        title.setPublished(true);
         setId(title, 22L);
         VideoAsset asset = new VideoAsset(title, VideoAssetStatus.READY);
         setId(asset, 77L);
@@ -68,6 +73,7 @@ class PlaybackServiceTest {
         setId(profile, 6L);
 
         Title title = new Title(TitleType.MOVIE, "Deadpool", "explicit", 2016, MaturityRating.R);
+        title.setPublished(true);
         setId(title, 23L);
         VideoAsset asset = new VideoAsset(title, VideoAssetStatus.READY);
         setId(asset, 78L);

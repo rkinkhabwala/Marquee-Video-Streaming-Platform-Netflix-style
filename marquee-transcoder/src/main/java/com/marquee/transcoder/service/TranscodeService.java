@@ -1,125 +1,97 @@
 package com.marquee.transcoder.service;
 
+import com.marquee.common.jobs.TranscodeJob;
+import com.marquee.common.storage.StorageKeys;
 import com.marquee.transcoder.ffmpeg.FfmpegCommandBuilder;
 import com.marquee.transcoder.ffmpeg.FfprobeService;
 import com.marquee.transcoder.ffmpeg.Rendition;
 import com.marquee.transcoder.storage.TranscodeStorageService;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Stream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
 public class TranscodeService {
+    private static final Logger log = LoggerFactory.getLogger(TranscodeService.class);
+
     private final FfmpegCommandBuilder ffmpegCommandBuilder;
     private final FfprobeService ffprobeService;
-    private final TranscodeStorageService transcodeStorageService;
-    private final TranscodeStatusCallback transcodeStatusCallback;
+    private final TranscodeStorageService storage;
 
     public TranscodeService(FfmpegCommandBuilder ffmpegCommandBuilder,
-                           FfprobeService ffprobeService,
-                           TranscodeStorageService transcodeStorageService,
-                           TranscodeStatusCallback transcodeStatusCallback) {
+                            FfprobeService ffprobeService,
+                            TranscodeStorageService storage) {
         this.ffmpegCommandBuilder = ffmpegCommandBuilder;
         this.ffprobeService = ffprobeService;
-        this.transcodeStorageService = transcodeStorageService;
-        this.transcodeStatusCallback = transcodeStatusCallback;
+        this.storage = storage;
     }
 
-    public void transcode(TranscodeJobMessage job) {
-        if (job == null || job.assetId() == null || job.sourceKey() == null) {
-            throw new IllegalArgumentException("Transcode job must include assetId and sourceKey");
+    /** {@code durationSeconds} is null when the job was skipped because output already exists. */
+    public record Result(String masterPlaylistKey, Integer durationSeconds) {
+    }
+
+    public Result transcode(TranscodeJob job) throws IOException {
+        String masterKey = StorageKeys.masterPlaylist(job.assetId());
+        // The master playlist is uploaded last, so its presence means a previous run finished.
+        if (storage.exists(masterKey)) {
+            log.info("Asset {} already has {}, skipping", job.assetId(), masterKey);
+            return new Result(masterKey, null);
         }
 
-        Path tempDir = createTempDir(job.assetId());
+        Path workDir = Files.createTempDirectory("marquee-transcode-" + job.assetId());
         try {
-            Path sourceFile = tempDir.resolve("source.mp4");
-            Files.copy(transcodeStorageService.download(job.sourceKey()), sourceFile);
-
-            FfprobeService.ProbeMetadata metadata = ffprobeService.probe(sourceFile.toString());
-            List<Rendition> renditions = selectRenditions(metadata.height());
-            for (Rendition rendition : renditions) {
-                List<String> command = ffmpegCommandBuilder.buildRenditionCommand(
-                        sourceFile.toString(),
-                        tempDir.resolve(rendition.width() + "p").toString(),
-                        rendition,
-                        metadata.fps());
-                runProcess(command);
-                transcodeStorageService.uploadDirectory(tempDir.resolve(rendition.width() + "p"),
-                        "hls/%s/%sp/".formatted(job.assetId(), rendition.width()));
+            Path source = workDir.resolve("source.mp4");
+            try (InputStream in = storage.download(job.sourceKey())) {
+                Files.copy(in, source);
             }
 
-            String masterPlaylist = String.join(System.lineSeparator(), ffmpegCommandBuilder.buildMasterPlaylist(
-                    "hls/%s".formatted(job.assetId()), renditions));
-            Path masterFile = tempDir.resolve("master.m3u8");
-            Files.writeString(masterFile, masterPlaylist);
-            transcodeStorageService.uploadFile(masterFile, "hls/%s/master.m3u8".formatted(job.assetId()));
-            transcodeStatusCallback.onSuccess(job.assetId(), "hls/%s/master.m3u8".formatted(job.assetId()));
-        } catch (Exception e) {
-            transcodeStatusCallback.onFailure(job.assetId(), e.getMessage());
-            throw new IllegalStateException("Transcode failed for asset " + job.assetId(), e);
+            FfprobeService.ProbeMetadata metadata = ffprobeService.probe(source.toString());
+            List<Rendition> renditions = ffmpegCommandBuilder.selectRenditions(metadata.height());
+            for (Rendition rendition : renditions) {
+                Path outputDir = Files.createDirectories(workDir.resolve(rendition.name()));
+                run(ffmpegCommandBuilder.buildRenditionCommand(source.toString(), outputDir.toString(), rendition, metadata.fps()));
+                storage.uploadDirectory(outputDir, StorageKeys.hlsPrefix(job.assetId()) + rendition.name() + "/");
+            }
+
+            Path thumbsDir = Files.createDirectories(workDir.resolve("thumbs"));
+            run(ffmpegCommandBuilder.buildThumbnailCommand(source.toString(), thumbsDir.toString()));
+            storage.uploadDirectory(thumbsDir, StorageKeys.thumbnailsPrefix(job.assetId()));
+
+            Path master = workDir.resolve("master.m3u8");
+            Files.write(master, ffmpegCommandBuilder.buildMasterPlaylist(renditions));
+            storage.uploadFile(master, masterKey);
+            return new Result(masterKey, metadata.durationSeconds());
         } finally {
-            deleteIfExists(tempDir);
+            deleteRecursively(workDir);
         }
     }
 
-    private List<Rendition> selectRenditions(int sourceHeight) {
-        List<Rendition> renditions = new ArrayList<>();
-        if (sourceHeight >= 1080) {
-            renditions.add(Rendition.P1080);
-        }
-        if (sourceHeight >= 720) {
-            renditions.add(Rendition.P720);
-        }
-        if (sourceHeight >= 480) {
-            renditions.add(Rendition.P480);
-        }
-        if (sourceHeight >= 360) {
-            renditions.add(Rendition.P360);
-        }
-        if (renditions.isEmpty()) {
-            renditions.add(Rendition.P360);
-        }
-        return renditions;
-    }
-
-    private Path createTempDir(Long assetId) {
+    private void run(List<String> command) throws IOException {
+        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+        String output = new String(process.getInputStream().readAllBytes());
         try {
-            return Files.createTempDirectory("marquee-transcode-" + assetId);
-        } catch (IOException e) {
-            throw new IllegalStateException("Unable to create temp directory for transcode", e);
-        }
-    }
-
-    private void runProcess(List<String> command) {
-        try {
-            Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
-            String output = new String(process.getInputStream().readAllBytes());
             int exitCode = process.waitFor();
             if (exitCode != 0) {
-                throw new IllegalStateException("ffmpeg failed: " + output);
+                throw new IllegalStateException("ffmpeg exited with " + exitCode + ": " + output);
             }
-        } catch (IOException | InterruptedException e) {
+        } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("Unable to run ffmpeg command: " + command, e);
+            throw new IllegalStateException("Interrupted while running ffmpeg", e);
         }
     }
 
-    private void deleteIfExists(Path path) {
-        try {
-            Files.walk(path)
-                    .sorted((left, right) -> right.compareTo(left))
-                    .forEach(file -> {
-                        try {
-                            Files.deleteIfExists(file);
-                        } catch (IOException ignored) {
-                            // no-op
-                        }
-                    });
-        } catch (IOException ignored) {
-            // no-op
+    private void deleteRecursively(Path path) {
+        try (Stream<Path> files = Files.walk(path)) {
+            files.sorted(Comparator.reverseOrder()).forEach(file -> file.toFile().delete());
+        } catch (IOException e) {
+            log.warn("Unable to clean up {}", path, e);
         }
     }
 }

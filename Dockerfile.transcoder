@@ -11,7 +11,7 @@ COPY marquee-transcoder/src marquee-transcoder/src
 RUN mvn -B -ntp -pl marquee-transcoder -am package -DskipTests
 
 FROM eclipse-temurin:21-jre-alpine
-RUN apk add --no-cache curl
+RUN apk add --no-cache curl ffmpeg
 WORKDIR /app
 COPY --from=build /workspace/marquee-transcoder/target/marquee-transcoder.jar /app/app.jar
 EXPOSE 8081

@@ -30,10 +30,12 @@ public class MinioStorageService implements ObjectStorageService {
                               @Value("${app.storage.bucket}") String bucketName,
                               @Value("${app.storage.access-key}") String accessKey,
                               @Value("${app.storage.secret-key}") String secretKey,
-                              @Value("${app.storage.region}") String region) {
+                              @Value("${app.storage.region}") String region,
+                              @Value("${app.storage.public-endpoint:${app.storage.endpoint}}") String publicEndpoint) {
         this.bucketName = bucketName;
+        // Presigned URLs are used by clients outside Docker, so they must be signed for a host those clients can reach.
         this.presigner = S3Presigner.builder()
-                .endpointOverride(URI.create(endpoint))
+                .endpointOverride(URI.create(publicEndpoint))
                 .credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)))
                 .region(Region.of(region))
                 .serviceConfiguration(S3Configuration.builder().pathStyleAccessEnabled(true).build())
@@ -58,8 +60,9 @@ public class MinioStorageService implements ObjectStorageService {
             throw new IllegalArgumentException("fileName is required");
         }
 
-        String objectKey = "images/" + (request.titleId() != null ? request.titleId() : "upload") + "/" + kind + "/" + safeFileName;
         String contentType = detectContentType(safeFileName);
+        // Spec layout: images/{titleId}/poster.jpg | backdrop.jpg (extension follows the upload type).
+        String objectKey = "images/" + request.titleId() + "/" + kind + "." + extensionFor(contentType);
 
         PutObjectRequest putObjectRequest = PutObjectRequest.builder()
                 .bucket(bucketName)
@@ -121,6 +124,14 @@ public class MinioStorageService implements ObjectStorageService {
         } catch (IOException e) {
             throw new IllegalStateException("Unable to read object bytes for " + objectKey, e);
         }
+    }
+
+    private static String extensionFor(String contentType) {
+        return switch (contentType) {
+            case "image/png" -> "png";
+            case "image/webp" -> "webp";
+            default -> "jpg";
+        };
     }
 
     private String detectContentType(String fileName) {

@@ -6,6 +6,8 @@ import com.marquee.api.catalog.VideoAssetStatus;
 import com.marquee.api.catalog.VideoAssetRepository;
 import com.marquee.api.profile.Profile;
 import com.marquee.api.profile.ProfileRepository;
+import com.marquee.api.progress.WatchProgress;
+import com.marquee.api.progress.WatchProgressRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -15,13 +17,16 @@ public class PlaybackService {
     private final ProfileRepository profileRepository;
     private final VideoAssetRepository videoAssetRepository;
     private final PlaybackTokenService playbackTokenService;
+    private final WatchProgressRepository watchProgressRepository;
 
     public PlaybackService(ProfileRepository profileRepository,
                           VideoAssetRepository videoAssetRepository,
-                          PlaybackTokenService playbackTokenService) {
+                          PlaybackTokenService playbackTokenService,
+                          WatchProgressRepository watchProgressRepository) {
         this.profileRepository = profileRepository;
         this.videoAssetRepository = videoAssetRepository;
         this.playbackTokenService = playbackTokenService;
+        this.watchProgressRepository = watchProgressRepository;
     }
 
     public PlaybackResponse getPlayback(Long userId, Long profileId, Long assetId) {
@@ -37,8 +42,13 @@ public class PlaybackService {
 
         validateProfileAccess(profile, asset);
 
+        int resumeAt = watchProgressRepository.findByProfile_IdAndVideoAsset_Id(profileId, assetId)
+                .filter(progress -> !progress.isCompleted())
+                .map(WatchProgress::getPositionSeconds)
+                .orElse(0);
         String token = playbackTokenService.generate(assetId, profileId);
-        return new PlaybackResponse("/stream/" + assetId + "/master.m3u8?token=" + token, 0, asset.getDurationSeconds() == null ? 0 : asset.getDurationSeconds());
+        return new PlaybackResponse("/stream/" + assetId + "/master.m3u8?token=" + token, resumeAt,
+                asset.getDurationSeconds() == null ? 0 : asset.getDurationSeconds());
     }
 
     public PlaybackTokenClaims authorizeStream(Long assetId, String token) {
@@ -61,6 +71,9 @@ public class PlaybackService {
         Title title = asset.getTitle();
         if (title == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Asset is not associated with a title");
+        }
+        if (!title.isPublished()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Title not found");
         }
 
         if (profile.isKids() && (title.getMaturityRating() == null || !title.getMaturityRating().isKidsSafe())) {

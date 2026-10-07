@@ -16,6 +16,8 @@ import org.springframework.data.repository.query.Param;
 public interface WatchProgressRepository extends JpaRepository<WatchProgress, WatchProgressId> {
     Optional<WatchProgress> findByProfile_IdAndVideoAsset_Id(Long profileId, Long videoAssetId);
 
+    List<WatchProgress> findByProfile_IdAndVideoAsset_IdIn(Long profileId, Collection<Long> videoAssetIds);
+
     Optional<WatchProgress> findFirstByProfile_IdAndVideoAsset_IdInOrderByUpdatedAtDesc(Long profileId,
                                                                                          Collection<Long> videoAssetIds);
 

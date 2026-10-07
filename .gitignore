@@ -4,3 +4,4 @@ target/
 *.jar
 *.original
 /.idea/
+.env
