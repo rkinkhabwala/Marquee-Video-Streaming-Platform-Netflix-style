@@ -14,6 +14,10 @@ import com.marquee.api.catalog.TitleType;
 import com.marquee.api.catalog.VideoAsset;
 import com.marquee.api.catalog.VideoAssetRepository;
 import com.marquee.api.profile.Profile;
+import com.marquee.api.recsys.EngagementRecorder;
+import com.marquee.api.recsys.EngagementType;
+import com.marquee.api.recsys.RecommendedRows;
+import com.marquee.api.recsys.WatchMilestones;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -45,6 +49,8 @@ public class ProgressService {
     private final TitleRepository titleRepository;
     private final EpisodeRepository episodeRepository;
     private final RatingRepository ratingRepository;
+    private final EngagementRecorder engagement;
+    private final RecommendedRows recommendedRows;
 
     public ProgressService(TitleAccess titleAccess,
                            VideoAssetRepository videoAssetRepository,
@@ -52,7 +58,9 @@ public class ProgressService {
                            MyListRepository myListRepository,
                            TitleRepository titleRepository,
                            EpisodeRepository episodeRepository,
-                           RatingRepository ratingRepository) {
+                           RatingRepository ratingRepository,
+                           EngagementRecorder engagement,
+                           RecommendedRows recommendedRows) {
         this.titleAccess = titleAccess;
         this.videoAssetRepository = videoAssetRepository;
         this.watchProgressRepository = watchProgressRepository;
@@ -60,6 +68,8 @@ public class ProgressService {
         this.titleRepository = titleRepository;
         this.episodeRepository = episodeRepository;
         this.ratingRepository = ratingRepository;
+        this.engagement = engagement;
+        this.recommendedRows = recommendedRows;
     }
 
     @Transactional
@@ -81,6 +91,14 @@ public class ProgressService {
         progress.setCompleted(duration > 0 && positionSeconds >= duration * COMPLETION_THRESHOLD);
         progress.setUpdatedAt(Instant.now());
 
+        WatchMilestones.Result milestones = WatchMilestones.advance(progress.getMilestone(), positionSeconds, duration, progress.isCompleted());
+        progress.setMilestone(milestones.milestone());
+        if (asset.getTitle() != null) {
+            for (EngagementType reached : milestones.reached()) {
+                engagement.record(reached, profileId, asset.getTitle().getId(), positionSeconds, duration);
+            }
+        }
+
         WatchProgress saved = watchProgressRepository.save(progress);
         return new WatchProgressResponse(assetId, saved.getPositionSeconds(), saved.getDurationSeconds(), saved.isCompleted());
     }
@@ -94,6 +112,7 @@ public class ProgressService {
             return;
         }
         myListRepository.save(new MyList(profile, title));
+        engagement.record(EngagementType.MY_LIST_ADD, profileId, titleId, null, null);
     }
 
     @Transactional
@@ -109,9 +128,16 @@ public class ProgressService {
         }
         Profile profile = requireProfile(userId, profileId);
         requireVisibleTitle(profile, titleId);
-        ratingRepository.findById(new RatingId(profileId, titleId))
-                .ifPresentOrElse(rating -> rating.setThumbs(value),
-                        () -> ratingRepository.save(new Rating(profileId, titleId, value)));
+        Rating rating = ratingRepository.findById(new RatingId(profileId, titleId)).orElse(null);
+        if (rating != null && rating.getThumbs() == value) {
+            return; // unchanged: no new signal for recsys
+        }
+        if (rating == null) {
+            ratingRepository.save(new Rating(profileId, titleId, value));
+        } else {
+            rating.setThumbs(value);
+        }
+        engagement.record(value == 1 ? EngagementType.THUMBS_UP : EngagementType.THUMBS_DOWN, profileId, titleId, null, null);
     }
 
     @Transactional(readOnly = true)
@@ -120,13 +146,21 @@ public class ProgressService {
         boolean kids = profile.isKids();
         Set<Long> myListIds = myListRepository.findTitleIdsByProfileId(profileId);
 
+        List<WatchProgress> recent = watchProgressRepository.findRecentVisibleForProfile(
+                profileId, kids, KIDS_SAFE, PageRequest.of(0, CONTINUE_WATCHING_SCAN));
+        Title lastWatched = recent.isEmpty() ? null : recent.get(0).getVideoAsset().getTitle();
+        List<Title> trending = watchProgressRepository.findTrendingTitles(
+                Instant.now().minus(TRENDING_WINDOW_DAYS, ChronoUnit.DAYS), kids, KIDS_SAFE, PageRequest.of(0, ROW_SIZE));
+
         List<HomeRowResponse> rows = new ArrayList<>();
-        rows.add(new HomeRowResponse("Continue Watching", buildContinueWatching(profileId, kids, myListIds)));
+        rows.add(new HomeRowResponse("Continue Watching", buildContinueWatching(recent, myListIds)));
+        for (RecommendedRows.Row row : recommendedRows.build(profile, lastWatched, trending)) {
+            rows.add(new HomeRowResponse(row.title(), toTitleCards(row.titles(), myListIds)));
+        }
         rows.add(new HomeRowResponse("My List", myListRepository.findVisibleForProfile(profileId, kids, KIDS_SAFE).stream()
                 .map(item -> toTitleCard(item.getTitle(), myListIds, null))
                 .toList()));
-        rows.add(new HomeRowResponse("Trending", toTitleCards(watchProgressRepository.findTrendingTitles(
-                Instant.now().minus(TRENDING_WINDOW_DAYS, ChronoUnit.DAYS), kids, KIDS_SAFE, PageRequest.of(0, ROW_SIZE)), myListIds)));
+        rows.add(new HomeRowResponse("Trending", toTitleCards(trending, myListIds)));
         rows.add(new HomeRowResponse("New Releases", toTitleCards(
                 titleRepository.findNewReleases(kids, KIDS_SAFE, PageRequest.of(0, ROW_SIZE)), myListIds)));
         for (Genre genre : titleRepository.findTopGenres(kids, KIDS_SAFE, PageRequest.of(0, GENRE_ROW_COUNT))) {
@@ -174,11 +208,10 @@ public class ProgressService {
         throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No next episode available");
     }
 
-    private List<TitleCardResponse> buildContinueWatching(Long profileId, boolean kids, Set<Long> myListIds) {
+    private List<TitleCardResponse> buildContinueWatching(List<WatchProgress> recent, Set<Long> myListIds) {
         // Keep only the most recent progress row per title; drop titles whose latest row is finished.
         Map<Long, WatchProgress> latestByTitle = new LinkedHashMap<>();
-        for (WatchProgress progress : watchProgressRepository.findRecentVisibleForProfile(
-                profileId, kids, KIDS_SAFE, PageRequest.of(0, CONTINUE_WATCHING_SCAN))) {
+        for (WatchProgress progress : recent) {
             latestByTitle.putIfAbsent(progress.getVideoAsset().getTitle().getId(), progress);
         }
         return latestByTitle.values().stream()

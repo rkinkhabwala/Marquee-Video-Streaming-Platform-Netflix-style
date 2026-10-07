@@ -99,6 +99,15 @@ services:
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-admin_local_pass}
       SEED_USER_EMAIL: ${SEED_USER_EMAIL:-viewer@marquee.local}
       SEED_USER_PASSWORD: ${SEED_USER_PASSWORD:-viewer_local_pass}
+      # Recommendation system started separately with scripts/recsys.sh (host ports 18080-18082).
+      # When it is not running, the home page falls back to Trending and events wait in the outbox.
+      RECSYS_ENABLED: ${RECSYS_ENABLED:-true}
+      RECSYS_INGEST_URL: http://host.docker.internal:18081
+      RECSYS_CATALOG_URL: http://host.docker.internal:18082
+      RECSYS_RECOMMENDATIONS_URL: http://host.docker.internal:18080
+      RECSYS_API_KEY: ${RECSYS_API_KEY:-marquee-local-recsys-key}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${API_PORT:-8080}:8080"
     depends_on:

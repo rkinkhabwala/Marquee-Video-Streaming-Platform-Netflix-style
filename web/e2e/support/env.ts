@@ -24,3 +24,8 @@ export const API_URL = env.API_URL ?? `http://localhost:${env.API_PORT ?? '8080'
 export const ADMIN = { email: env.SEED_ADMIN_EMAIL ?? 'admin@marquee.local', password: env.SEED_ADMIN_PASSWORD ?? 'admin_local_pass' };
 export const VIEWER = { email: env.SEED_USER_EMAIL ?? 'viewer@marquee.local', password: env.SEED_USER_PASSWORD ?? 'viewer_local_pass' };
 export const CACHE_DIR = resolve(root, 'web/e2e/.cache');
+
+// Marquee's recsys instance (scripts/recsys.sh); see recsys/recsys.env.
+export const RECSYS_URL = env.RECSYS_URL ?? 'http://localhost:18080';
+export const RECSYS_CATALOG_URL = 'http://localhost:18082';
+export const RECSYS_API_KEY = env.RECSYS_API_KEY ?? 'marquee-local-recsys-key';

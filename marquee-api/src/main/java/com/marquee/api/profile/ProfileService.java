@@ -1,5 +1,6 @@
 package com.marquee.api.profile;
 
+import com.marquee.api.recsys.EngagementRecorder;
 import com.marquee.api.user.User;
 import com.marquee.api.user.UserRepository;
 import org.springframework.http.HttpStatus;
@@ -15,10 +16,12 @@ public class ProfileService {
 
     private final ProfileRepository profileRepository;
     private final UserRepository userRepository;
+    private final EngagementRecorder engagement;
 
-    public ProfileService(ProfileRepository profileRepository, UserRepository userRepository) {
+    public ProfileService(ProfileRepository profileRepository, UserRepository userRepository, EngagementRecorder engagement) {
         this.profileRepository = profileRepository;
         this.userRepository = userRepository;
+        this.engagement = engagement;
     }
 
     @Transactional(readOnly = true)
@@ -81,5 +84,6 @@ public class ProfileService {
         Profile profile = profileRepository.findByIdAndUserId(profileId, userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Profile not found"));
         profileRepository.delete(profile);
+        engagement.profileDeleted(profileId);
     }
 }

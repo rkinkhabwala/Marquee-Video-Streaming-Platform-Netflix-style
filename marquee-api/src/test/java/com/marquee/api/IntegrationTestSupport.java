@@ -1,8 +1,10 @@
 package com.marquee.api;
 
+import com.marquee.api.recsys.StubRecsysConfig;
 import java.net.URI;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.MinIOContainer;
@@ -20,8 +22,13 @@ import software.amazon.awssdk.services.s3.S3Configuration;
  * Shared Postgres, RabbitMQ and MinIO containers, started once per JVM so every
  * integration test reuses the same containers and Spring context.
  */
-@SpringBootTest
+@SpringBootTest(properties = {
+        // recsys is replaced by StubRecsysClient; tests run the outbox relay explicitly.
+        "app.recsys.enabled=true",
+        "app.recsys.relay-enabled=false"
+})
 @AutoConfigureMockMvc
+@Import(StubRecsysConfig.class)
 public abstract class IntegrationTestSupport {
     protected static final String BUCKET = "marquee";
 

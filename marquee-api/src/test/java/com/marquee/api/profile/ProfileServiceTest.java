@@ -1,5 +1,6 @@
 package com.marquee.api.profile;
 
+import com.marquee.api.recsys.EngagementRecorder;
 import com.marquee.api.user.User;
 import com.marquee.api.user.UserRepository;
 import org.junit.jupiter.api.Test;
@@ -24,6 +25,9 @@ class ProfileServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private EngagementRecorder engagement;
 
     @InjectMocks
     private ProfileService profileService;

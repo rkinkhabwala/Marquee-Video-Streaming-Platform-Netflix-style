@@ -1,0 +1,27 @@
+# Overlay for running the existing recommendation system (../Recommendation engine) as a dedicated
+# instance for Marquee next to the Marquee stack. Used by scripts/recsys.sh.
+#
+# - Publishes only the three APIs Marquee calls, on ports that do not clash with Marquee
+#   (8080/8081/3000/5432/6379 are taken by the Marquee stack).
+# - Infrastructure stays internal to the recsys network.
+services:
+  recommendation-api:
+    ports: !override ["18080:8080"]
+  ingestion-api:
+    ports: !override ["18081:8081"]
+  catalog-service:
+    ports: !override ["18082:8082"]
+  kafka:
+    ports: !reset []
+  schema-registry:
+    ports: !reset []
+  redis:
+    ports: !reset []
+  qdrant:
+    ports: !reset []
+  postgres:
+    ports: !reset []
+  stream-processor:
+    ports: !reset []
+  embedding-worker:
+    ports: !reset []

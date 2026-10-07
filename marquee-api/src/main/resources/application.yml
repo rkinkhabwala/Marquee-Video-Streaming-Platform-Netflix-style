@@ -47,6 +47,19 @@ app:
     public-endpoint: ${MINIO_PUBLIC_ENDPOINT:${MINIO_ENDPOINT:http://localhost:9000}}
   stream:
     token-ttl-hours: ${STREAM_TOKEN_TTL_HOURS:2}
+  recsys:
+    # The external recommendation system (spec Phase 3; run it with scripts/recsys.sh).
+    enabled: ${RECSYS_ENABLED:false}
+    ingest-url: ${RECSYS_INGEST_URL:http://localhost:18081}
+    catalog-url: ${RECSYS_CATALOG_URL:http://localhost:18082}
+    recommendations-url: ${RECSYS_RECOMMENDATIONS_URL:http://localhost:18080}
+    api-key: ${RECSYS_API_KEY:marquee-local-recsys-key}
+    # Recommendations are on the home page's critical path: fail fast and fall back.
+    connect-timeout: ${RECSYS_CONNECT_TIMEOUT:300ms}
+    read-timeout: ${RECSYS_READ_TIMEOUT:800ms}
+    relay-enabled: ${RECSYS_RELAY_ENABLED:true}
+    relay-batch-size: ${RECSYS_RELAY_BATCH_SIZE:200}
+    relay-interval-ms: ${RECSYS_RELAY_INTERVAL_MS:2000}
   seed:
     enabled: ${SEED_ENABLED:false}
     admin-email: ${SEED_ADMIN_EMAIL:admin@marquee.local}

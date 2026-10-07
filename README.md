@@ -4,7 +4,8 @@ Marquee is a local-only, Netflix-style video streaming app. An admin uploads vid
 transcoded to adaptive-bitrate HLS and streamed to viewers with signed URLs. The stack is a React web
 client, the Spring Boot API and transcoder, PostgreSQL, Redis, RabbitMQ and MinIO. See
 [spec.md](spec.md) for the full design, and the decision notes for
-[Phase 1](docs/phase-1-notes.md) (backend and pipeline) and [Phase 2](docs/phase-2-notes.md) (web client).
+[Phase 1](docs/phase-1-notes.md) (backend and pipeline), [Phase 2](docs/phase-2-notes.md) (web client)
+and [Phase 3](docs/phase-3-notes.md) (recommendations).
 
 ## Start the local stack
 
@@ -88,6 +89,24 @@ npm install
 npm run dev        # http://localhost:5173
 ```
 
+## Recommendations (optional)
+
+Personalised rows ("Top picks for {profile}", "Because you watched X") come from the existing
+real-time recommendation system in `~/Desktop/Recommendation engine` (set `RECSYS_DIR` if it lives
+elsewhere). Marquee runs its own instance of it next to the Marquee stack:
+
+```sh
+scripts/recsys.sh up        # starts the recsys services Marquee needs (images built in the recsys repo)
+scripts/recsys.sh status
+scripts/recsys.sh down      # keeps its data; `stop` / `start` / `logs [service]` also work
+```
+
+It listens on ports 18080 (recommendations), 18081 (event ingest) and 18082 (catalog), and needs
+about 2.5 GB of Docker memory on top of Marquee. The API publishes engagement events and catalog
+changes to it through an outbox, so Marquee works the same without it: the home page shows Trending
+in place of Top picks, and events are delivered once recsys is up again (events older than 24 h are
+dropped). Set `RECSYS_ENABLED=false` to turn the integration off.
+
 ## API overview
 
 All `/api` calls except register, login and refresh need `Authorization: Bearer <accessToken>`.
@@ -126,6 +145,9 @@ npm test                                     # unit tests (Vitest)
 npx playwright test                          # end-to-end, against the running Compose stack
 E2E_BASE_URL=http://localhost:3000 npx playwright test   # same, through the web container
 ```
+
+`recommendations.spec.ts` runs only when recsys is up (`scripts/recsys.sh up`); it stops and
+restarts the recsys recommendation API to check the outage fallback.
 
 The end-to-end tests drive the installed Google Chrome (Playwright's bundled Chromium cannot decode
 H.264). On first run they generate test clips with `ffmpeg` and ingest them through the real

@@ -5,6 +5,7 @@ import com.marquee.api.catalog.TitleRepository;
 import com.marquee.api.catalog.VideoAsset;
 import com.marquee.api.catalog.VideoAssetRepository;
 import com.marquee.api.catalog.VideoAssetStatus;
+import com.marquee.api.recsys.EngagementRecorder;
 import com.marquee.api.storage.ObjectStorageService;
 import com.marquee.api.storage.PresignedUploadResponse;
 import com.marquee.common.jobs.TranscodeEvent;
@@ -29,17 +30,20 @@ public class IngestService {
     private final TranscodeAttemptRepository attemptRepository;
     private final ObjectStorageService objectStorageService;
     private final TranscodeJobPublisher transcodeJobPublisher;
+    private final EngagementRecorder engagement;
 
     public IngestService(VideoAssetRepository videoAssetRepository,
                         TitleRepository titleRepository,
                         TranscodeAttemptRepository attemptRepository,
                         ObjectStorageService objectStorageService,
-                        TranscodeJobPublisher transcodeJobPublisher) {
+                        TranscodeJobPublisher transcodeJobPublisher,
+                        EngagementRecorder engagement) {
         this.videoAssetRepository = videoAssetRepository;
         this.titleRepository = titleRepository;
         this.attemptRepository = attemptRepository;
         this.objectStorageService = objectStorageService;
         this.transcodeJobPublisher = transcodeJobPublisher;
+        this.engagement = engagement;
     }
 
     @Transactional
@@ -112,6 +116,9 @@ public class IngestService {
                 asset.setErrorMessage(null);
                 if (event.durationSeconds() != null) {
                     asset.setDurationSeconds(event.durationSeconds());
+                }
+                if (asset.getTitle() != null) {
+                    engagement.catalogChanged(asset.getTitle().getId());
                 }
             }
             case FAILED -> {

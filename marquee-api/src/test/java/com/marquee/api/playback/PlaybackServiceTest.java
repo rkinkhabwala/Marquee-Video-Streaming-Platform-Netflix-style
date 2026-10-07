@@ -9,6 +9,7 @@ import com.marquee.api.catalog.VideoAssetRepository;
 import com.marquee.api.catalog.VideoAssetStatus;
 import com.marquee.api.profile.Profile;
 import com.marquee.api.profile.ProfileRepository;
+import com.marquee.api.recsys.EngagementRecorder;
 import com.marquee.api.user.User;
 import java.lang.reflect.Field;
 import java.util.Optional;
@@ -37,6 +38,9 @@ class PlaybackServiceTest {
 
     @Mock
     private WatchProgressRepository watchProgressRepository;
+
+    @Mock
+    private EngagementRecorder engagement;
 
     @InjectMocks
     private PlaybackService playbackService;

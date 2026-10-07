@@ -37,6 +37,10 @@ public class WatchProgress {
     @Column(nullable = false)
     private boolean completed = false;
 
+    /** Highest progress milestone already reported to recsys for the current viewing (0/25/50/75/100). */
+    @Column(nullable = false)
+    private short milestone = 0;
+
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt = Instant.now();
 
@@ -99,5 +103,13 @@ public class WatchProgress {
 
     public void setUpdatedAt(Instant updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public int getMilestone() {
+        return milestone;
+    }
+
+    public void setMilestone(int milestone) {
+        this.milestone = (short) milestone;
     }
 }

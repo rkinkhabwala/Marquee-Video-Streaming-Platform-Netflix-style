@@ -9,6 +9,8 @@ import com.marquee.api.progress.RatingId;
 import com.marquee.api.progress.RatingRepository;
 import com.marquee.api.progress.WatchProgress;
 import com.marquee.api.progress.WatchProgressRepository;
+import com.marquee.api.recsys.EngagementRecorder;
+import com.marquee.api.recsys.EngagementType;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -39,6 +41,7 @@ public class CatalogService {
     private final MyListRepository myListRepository;
     private final RatingRepository ratingRepository;
     private final WatchProgressRepository watchProgressRepository;
+    private final EngagementRecorder engagement;
 
     public CatalogService(TitleAccess titleAccess,
                           TitleRepository titleRepository,
@@ -47,7 +50,8 @@ public class CatalogService {
                           VideoAssetRepository videoAssetRepository,
                           MyListRepository myListRepository,
                           RatingRepository ratingRepository,
-                          WatchProgressRepository watchProgressRepository) {
+                          WatchProgressRepository watchProgressRepository,
+                          EngagementRecorder engagement) {
         this.titleAccess = titleAccess;
         this.titleRepository = titleRepository;
         this.seasonRepository = seasonRepository;
@@ -56,6 +60,7 @@ public class CatalogService {
         this.myListRepository = myListRepository;
         this.ratingRepository = ratingRepository;
         this.watchProgressRepository = watchProgressRepository;
+        this.engagement = engagement;
     }
 
     @Transactional(readOnly = true)
@@ -100,13 +105,17 @@ public class CatalogService {
                 title -> TitleCardResponse.of(title, myListIds.contains(title.getId())));
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public PageResponse<TitleCardResponse> search(Long userId, Long profileId, String query, int page, int size) {
         if (query == null || query.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "q is required");
         }
         Profile profile = titleAccess.requireProfile(userId, profileId);
         Set<Long> myListIds = myListRepository.findTitleIdsByProfileId(profileId);
+        if (page == 0) {
+            // Only the fact that a search happened; recsys never receives the query text.
+            engagement.record(EngagementType.SEARCH, profileId, null, null, null);
+        }
         return PageResponse.of(
                 titleRepository.search(query.trim(), profile.isKids(), KIDS_SAFE_DB_VALUES, pageable(page, size)),
                 title -> TitleCardResponse.of(title, myListIds.contains(title.getId())));

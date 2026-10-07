@@ -8,8 +8,11 @@ import com.marquee.api.profile.Profile;
 import com.marquee.api.profile.ProfileRepository;
 import com.marquee.api.progress.WatchProgress;
 import com.marquee.api.progress.WatchProgressRepository;
+import com.marquee.api.recsys.EngagementRecorder;
+import com.marquee.api.recsys.EngagementType;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
@@ -18,17 +21,21 @@ public class PlaybackService {
     private final VideoAssetRepository videoAssetRepository;
     private final PlaybackTokenService playbackTokenService;
     private final WatchProgressRepository watchProgressRepository;
+    private final EngagementRecorder engagement;
 
     public PlaybackService(ProfileRepository profileRepository,
                           VideoAssetRepository videoAssetRepository,
                           PlaybackTokenService playbackTokenService,
-                          WatchProgressRepository watchProgressRepository) {
+                          WatchProgressRepository watchProgressRepository,
+                          EngagementRecorder engagement) {
         this.profileRepository = profileRepository;
         this.videoAssetRepository = videoAssetRepository;
         this.playbackTokenService = playbackTokenService;
         this.watchProgressRepository = watchProgressRepository;
+        this.engagement = engagement;
     }
 
+    @Transactional
     public PlaybackResponse getPlayback(Long userId, Long profileId, Long assetId) {
         Profile profile = profileRepository.findByIdAndUserId(profileId, userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Profile not found"));
@@ -46,6 +53,8 @@ public class PlaybackService {
                 .filter(progress -> !progress.isCompleted())
                 .map(WatchProgress::getPositionSeconds)
                 .orElse(0);
+        int duration = asset.getDurationSeconds() == null ? 0 : asset.getDurationSeconds();
+        engagement.record(EngagementType.PLAY_START, profileId, asset.getTitle().getId(), resumeAt, duration);
         String token = playbackTokenService.generate(assetId, profileId);
         return new PlaybackResponse("/stream/" + assetId + "/master.m3u8?token=" + token, resumeAt,
                 asset.getDurationSeconds() == null ? 0 : asset.getDurationSeconds());

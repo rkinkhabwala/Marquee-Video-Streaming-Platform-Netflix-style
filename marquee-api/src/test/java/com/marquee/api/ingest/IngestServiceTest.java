@@ -13,6 +13,7 @@ import com.marquee.api.catalog.TitleType;
 import com.marquee.api.catalog.VideoAsset;
 import com.marquee.api.catalog.VideoAssetRepository;
 import com.marquee.api.catalog.VideoAssetStatus;
+import com.marquee.api.recsys.EngagementRecorder;
 import com.marquee.api.storage.ObjectStorageService;
 import com.marquee.api.storage.PresignedUploadResponse;
 import com.marquee.common.jobs.TranscodeEvent;
@@ -43,6 +44,9 @@ class IngestServiceTest {
 
     @Mock
     private TranscodeJobPublisher transcodeJobPublisher;
+
+    @Mock
+    private EngagementRecorder engagement;
 
     @InjectMocks
     private IngestService ingestService;

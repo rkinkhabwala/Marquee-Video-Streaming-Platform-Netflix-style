@@ -15,10 +15,12 @@ export class ApiSession {
     return new ApiSession(((await response.json()) as { accessToken: string }).accessToken);
   }
 
-  async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  async request<T>(method: string, path: string, body?: unknown, profileId?: number): Promise<T> {
+    const headers: Record<string, string> = { Authorization: `Bearer ${this.token}`, 'Content-Type': 'application/json' };
+    if (profileId !== undefined) headers['X-Profile-Id'] = String(profileId);
     const response = await fetch(`${API_URL}${path}`, {
       method,
-      headers: { Authorization: `Bearer ${this.token}`, 'Content-Type': 'application/json' },
+      headers,
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     if (!response.ok) throw new Error(`${method} ${path} -> ${response.status}: ${await response.text()}`);

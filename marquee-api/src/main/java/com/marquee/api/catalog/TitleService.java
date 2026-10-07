@@ -1,5 +1,6 @@
 package com.marquee.api.catalog;
 
+import com.marquee.api.recsys.EngagementRecorder;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -15,17 +16,20 @@ public class TitleService {
     private final SeasonRepository seasonRepository;
     private final EpisodeRepository episodeRepository;
     private final VideoAssetRepository videoAssetRepository;
+    private final EngagementRecorder engagement;
 
     public TitleService(TitleRepository titleRepository,
                         GenreRepository genreRepository,
                         SeasonRepository seasonRepository,
                         EpisodeRepository episodeRepository,
-                        VideoAssetRepository videoAssetRepository) {
+                        VideoAssetRepository videoAssetRepository,
+                        EngagementRecorder engagement) {
         this.titleRepository = titleRepository;
         this.genreRepository = genreRepository;
         this.seasonRepository = seasonRepository;
         this.episodeRepository = episodeRepository;
         this.videoAssetRepository = videoAssetRepository;
+        this.engagement = engagement;
     }
 
     @Transactional(readOnly = true)
@@ -65,6 +69,7 @@ public class TitleService {
         Set<Genre> genres = resolveGenres(request.genreIds());
         title.setGenres(genres);
         Title savedTitle = titleRepository.save(title);
+        engagement.catalogChanged(savedTitle.getId());
         return toTitleResponse(savedTitle);
     }
 
@@ -104,6 +109,7 @@ public class TitleService {
             title.setGenres(resolveGenres(request.genreIds()));
         }
         titleRepository.save(title);
+        engagement.catalogChanged(title.getId());
         return toTitleResponse(title);
     }
 
@@ -113,6 +119,7 @@ public class TitleService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Title not found");
         }
         titleRepository.deleteById(id);
+        engagement.catalogChanged(id);
     }
 
     @Transactional
@@ -120,7 +127,9 @@ public class TitleService {
         Title title = titleRepository.findWithGenresById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Title not found"));
         title.setPublished(true);
-        return toTitleResponse(titleRepository.save(title));
+        Title saved = titleRepository.save(title);
+        engagement.catalogChanged(saved.getId());
+        return toTitleResponse(saved);
     }
 
     @Transactional(readOnly = true)

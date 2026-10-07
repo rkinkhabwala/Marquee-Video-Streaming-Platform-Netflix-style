@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
+import com.marquee.api.recsys.EngagementRecorder;
 import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Optional;
@@ -33,6 +34,9 @@ class TitleServiceTest {
 
     @Mock
     private VideoAssetRepository videoAssetRepository;
+
+    @Mock
+    private EngagementRecorder engagement;
 
     @InjectMocks
     private TitleService titleService;
